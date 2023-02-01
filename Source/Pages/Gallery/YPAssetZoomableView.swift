@@ -60,23 +60,33 @@ final class YPAssetZoomableView: UIScrollView {
     public func setVideo(_ video: PHAsset,
                          mediaManager: LibraryMediaManager,
                          storedCropPosition: YPLibrarySelection?,
+                         selectedItemsCount: Int,
+                         selectedMediaIndex: Int,
                          completion: @escaping () -> Void,
                          updateCropInfo: @escaping () -> Void) {
         mediaManager.imageManager?.fetchPreviewFor(video: video) { [weak self] preview in
             guard let strongSelf = self else { return }
-            guard strongSelf.currentAsset != video else { completion() ; return }
-            
-            if strongSelf.videoView.isDescendant(of: strongSelf) == false {
-                strongSelf.isVideoMode = true
-                strongSelf.photoImageView.removeFromSuperview()
-                strongSelf.addSubview(strongSelf.videoView)
+            if selectedMediaIndex > 0 {
+                guard strongSelf.currentAsset != video else { completion() ; return }
             }
             
-            strongSelf.videoView.setPreviewImage(preview)
-            
-            strongSelf.setAssetFrame(for: strongSelf.videoView, with: preview)
-
-            strongSelf.squaredZoomScale = strongSelf.calculateSquaredZoomScale()
+            if selectedItemsCount > 0 {
+                if strongSelf.videoView.isDescendant(of: strongSelf) == false {
+                    strongSelf.isVideoMode = true
+                    strongSelf.photoImageView.removeFromSuperview()
+                    strongSelf.addSubview(strongSelf.videoView)
+                }
+                strongSelf.videoView.setPreviewImage(preview)
+                
+                strongSelf.setAssetFrame(for: strongSelf.videoView, with: preview)
+            }
+            else {
+                let imgvw = UIImageView(frame: CGRect(x: 0, y: 0, width: strongSelf.bounds.width, height: strongSelf.bounds.height))
+                imgvw.image = UIImage(named: "selectImg_placeholder")
+                imgvw.contentMode = .scaleAspectFill
+                
+                strongSelf.addSubview(imgvw)
+            }
             
             completion()
             
@@ -87,26 +97,34 @@ final class YPAssetZoomableView: UIScrollView {
                 updateCropInfo()
             }
         }
-        mediaManager.imageManager?.fetchPlayerItem(for: video) { [weak self] playerItem in
-            guard let strongSelf = self else { return }
-            guard strongSelf.currentAsset != video else { completion() ; return }
-            strongSelf.currentAsset = video
-
-            strongSelf.videoView.loadVideo(playerItem)
-            strongSelf.videoView.play()
-            strongSelf.zoomableViewDelegate?.ypAssetZoomableViewDidLayoutSubviews(strongSelf)
+        if selectedItemsCount > 0 {
+            mediaManager.imageManager?.fetchPlayerItem(for: video) { [weak self] playerItem in
+                guard let strongSelf = self else { return }
+                guard strongSelf.currentAsset != video else { completion() ; return }
+                strongSelf.currentAsset = video
+                
+                strongSelf.videoView.loadVideo(playerItem)
+                strongSelf.videoView.play()
+                strongSelf.zoomableViewDelegate?.ypAssetZoomableViewDidLayoutSubviews(strongSelf)
+            }
         }
+        
     }
     
     public func setImage(_ photo: PHAsset,
                          mediaManager: LibraryMediaManager,
                          storedCropPosition: YPLibrarySelection?,
+                         selectedItemsCount: Int,
+                         selectedMediaIndex: Int,
                          completion: @escaping (Bool) -> Void,
                          updateCropInfo: @escaping () -> Void) {
-        guard currentAsset != photo else {
-            DispatchQueue.main.async { completion(false) }
-            return
+        if selectedMediaIndex > 0 {
+            guard currentAsset != photo else {
+                DispatchQueue.main.async { completion(false) }
+                return
+            }
         }
+        
         currentAsset = photo
         
         mediaManager.imageManager?.fetch(photo: photo) { [weak self] image, isLowResIntermediaryImage in
@@ -123,7 +141,11 @@ final class YPAssetZoomableView: UIScrollView {
                 strongSelf.photoImageView.clipsToBounds = true
             }
             
-            strongSelf.photoImageView.image = image
+            if selectedItemsCount > 0 {
+                strongSelf.photoImageView.image = image
+            }else {
+                strongSelf.photoImageView.image = UIImage(named: "selectImg_placeholder")
+            }
            
             strongSelf.setAssetFrame(for: strongSelf.photoImageView, with: image)
                 
@@ -133,8 +155,6 @@ final class YPAssetZoomableView: UIScrollView {
                 // add update CropInfo after multiple
                 updateCropInfo()
             }
-
-            strongSelf.squaredZoomScale = strongSelf.calculateSquaredZoomScale()
             
             completion(isLowResIntermediaryImage)
         }
